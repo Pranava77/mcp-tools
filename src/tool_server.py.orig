@@ -1,0 +1,46 @@
+"""A minimal MCP-style tool server: tools/list + tools/call, in-process.
+
+Real MCP wraps exactly this shape in JSON-RPC over stdio/HTTP (see the official
+SDKs). We keep it in-process so every moving part is visible in ~40 lines.
+Supports dry-run: writes are blocked and recorded as a plan.
+"""
+from __future__ import annotations
+
+from typing import Callable
+
+
+class ToolError(Exception):
+    pass
+
+
+class ToolServer:
+    def __init__(self, dry_run: bool = False):
+        self._tools: dict[str, dict] = {}
+        self.dry_run = dry_run
+        self.plan: list[str] = []        # what WOULD have run in dry-run
+
+    def tool(self, name: str, description: str, schema: dict,
+             write: bool = False) -> Callable:
+        def register(fn: Callable) -> Callable:
+            self._tools[name] = {"fn": fn, "description": description,
+                                 "schema": schema, "write": write}
+            return fn
+        return register
+
+    def list_tools(self) -> list[dict]:
+        return [{"name": n, "description": t["description"],
+                 "schema": t["schema"], "write": t["write"]}
+                for n, t in self._tools.items()]
+
+    def call_tool(self, name: str, args: dict):
+        # TODO(you) — the dispatch you watched demoed:
+        #   1. unknown tool -> raise ToolError
+        #   2. args not in the schema -> raise ToolError
+        #   3. write tool + dry_run -> append to self.plan,
+        #      return {"status": "dry-run", "tool": name}
+        #   4. else run the function with **args
+        raise NotImplementedError
+
+    def catalog_text(self) -> str:
+        return "\n".join(f"- {t['name']}: {t['description']}"
+                         for t in self.list_tools())
